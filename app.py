@@ -6,13 +6,16 @@ import sqlite3
 import os
 import uuid
 import shutil
+import time
 
 # Disable GPU usage
 import torch
 torch.cuda.is_available = lambda: False
 
 app = FastAPI()
-
+labels = [
+   "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light", "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow", "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee", "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard", "tennis racket", "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple", "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "couch", "potted plant", "bed", "dining table", "toilet", "tv", "laptop", "mouse", "remote", "keyboard", "cell phone", "microwave", "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush"
+]
 UPLOAD_DIR = "uploads/original"
 PREDICTED_DIR = "uploads/predicted"
 DB_PATH = "predictions.db"
@@ -80,6 +83,8 @@ def predict(file: UploadFile = File(...)):
     """
     Predict objects in an image
     """
+    start_time = time.time()
+
     ext = os.path.splitext(file.filename)[1]
     uid = str(uuid.uuid4())
     original_path = os.path.join(UPLOAD_DIR, uid + ext)
@@ -88,7 +93,10 @@ def predict(file: UploadFile = File(...)):
     with open(original_path, "wb") as f:
         shutil.copyfileobj(file.file, f)
 
-    results = model(original_path, device="cpu")
+    try:
+        results = model(original_path, device="cpu")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Inference failed: {str(e)}")
 
     annotated_frame = results[0].plot()  # NumPy image with boxes
     annotated_image = Image.fromarray(annotated_frame)
@@ -104,11 +112,12 @@ def predict(file: UploadFile = File(...)):
         bbox = box.xyxy[0].tolist()
         save_detection_object(uid, label, score, bbox)
         detected_labels.append(label)
-
+    time_taken = time.time() - start_time
     return {
         "prediction_uid": uid, 
         "detection_count": len(results[0].boxes),
-        "labels": detected_labels
+        "labels": detected_labels,
+        "time_took": time_taken
     }
 
 @app.get("/prediction/{uid}")
@@ -149,6 +158,8 @@ def get_predictions_by_label(label: str):
     """
     Get prediction sessions containing objects with specified label
     """
+    if label not in labels :
+       raise HTTPException(status_code=400, detail="Invalid image type")
     with sqlite3.connect(DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
         rows = conn.execute("""
@@ -188,6 +199,7 @@ def get_image(type: str, filename: str):
         raise HTTPException(status_code=404, detail="Image not found")
     return FileResponse(path)
 
+
 @app.get("/prediction/{uid}/image")
 def get_prediction_image(uid: str, request: Request):
     """
@@ -210,6 +222,22 @@ def get_prediction_image(uid: str, request: Request):
     else:
         # If the client doesn't accept image, respond with 406 Not Acceptable
         raise HTTPException(status_code=406, detail="Client does not accept an image format")
+    
+@app.get("/prediction/count")
+def get_prediction_count_last_week():
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute("""
+                SELECT COUNT(*) as count
+                FROM prediction_sessions
+                WHERE timestamp > datetime('now', '-7 day')
+            """).fetchall()
+            return {"count": rows[0]["count"]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return {"count": 0}
+    
 
 @app.get("/health")
 def health():
