@@ -29,14 +29,18 @@ class Test_Count(unittest.TestCase):
             files={"file": ("test.jpg", self.image_bytes, "image/jpeg")}
         )
         
-        # Check response
-        self.assertEqual(response.status_code, 200)
-        data = response.json()
+        response1 = self.client.get("/prediction/count")
+        self.assertEqual(response1.status_code, 200)
+        self.assertEqual(response1.json(), {"count": 1})
+
+
+
+    # def test_count_older_8days(self):
+    #     """Test that the predict endpoint returns count of prediction sessions"""
+    #     response = self.client.get("/prediction/count")
+    #     self.assertEqual(response.status_code, 200)
+    #     self.assertEqual(response.json(), {"count": 0})
         
-        # Verify new field exists
-        self.assertIn("count", data)
-        self.assertIsInstance(data["count"], int)
-        self.assertGreater(data["count"], 0)
         
 
     
