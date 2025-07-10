@@ -6,8 +6,8 @@
 .env.development.local
 .env.test.local
 .env.production.local
-
+*cache*
 *.db
 *.pt
-
+__pycache__
 uploads/
