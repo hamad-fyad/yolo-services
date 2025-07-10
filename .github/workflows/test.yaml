@@ -10,6 +10,9 @@ jobs:
   test:
     runs-on: ubuntu-latest
     
+    secrets:
+      pixabay_api_key: ${{ secrets.PIXABAY_API_KEY }}
+      
     steps:
     - uses: actions/checkout@v4
     
