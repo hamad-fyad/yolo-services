@@ -22,37 +22,26 @@ class Test_Count(unittest.TestCase):
         self.test_image.save(self.image_bytes, format='JPEG')
         self.image_bytes.seek(0)
 
-    def test_get_prediction_count_0(self):
+    def test_prediction_count_empty(self):
         response = self.client.get("/prediction/count")
+        # Check response
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {"count": 0})
-    
-    
-    def test_predict_includes_processing_time(self):
-        """Test that the predict endpoint returns count of prediction sessions"""
+        data = response.json()
+        self.assertEqual(data.get("count"), 0)
         
+    def test_prediction_count_after_prediction(self):
         response = self.client.post(
             "/predict",
             files={"file": ("test.jpg", self.image_bytes, "image/jpeg")}
         )
-        
-        response1 = self.client.get("/prediction/count")
-        self.assertEqual(response1.status_code, 200)
-        self.assertEqual(response1.json(), {"count": 1})
+        response2= self.client.get("/prediction/count")
+        # Check response
+        self.assertEqual(response2.status_code, 200)
+        data = response2.json()
+        self.assertEqual(data.get("count"), 1)
 
 
 
-    def test_count_older_8days(self):
-        """Test that the predict endpoint returns count of prediction sessions"""
-        
-        response = self.client.post(
-            "/predict",
-            files={"file": ("test.jpg", self.image_bytes, "image/jpeg")}
-        )
-        
-        response1 = self.client.get("/prediction/count")
-        self.assertEqual(response1.status_code, 200)
-        self.assertEqual(response1.json(), {"count": 1})
 
         
         
