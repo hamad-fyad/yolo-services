@@ -1,7 +1,7 @@
 .venv
 .vscode
 .idea
-.env
+*.env
 .env.local
 .env.development.local
 .env.test.local
@@ -12,3 +12,4 @@
 __pycache__
 uploads/
 secrets.env
+*.pyc
