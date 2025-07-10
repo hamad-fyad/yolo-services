@@ -58,6 +58,17 @@ def init_db():
 
 init_db()
 
+@app.get("/labels")
+def get_lables():
+    """
+    Get labels of objects detected in the last week
+    """
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute("SELECT DISTINCT label FROM detection_objects join prediction_sessions WHERE timestamp >= DATETIME('now', '-7 days')").fetchall()
+        print(rows)
+    return [row["label"] for row in rows]
+
 def save_prediction_session(uid, original_image, predicted_image):
     """
     Save prediction session to database
@@ -243,4 +254,4 @@ def health():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8080)
+    uvicorn.run("app:app", host="0.0.0.0", port=8080,reload=True)

@@ -3,8 +3,6 @@ from fastapi.testclient import TestClient
 from PIL import Image
 import io
 import os
-import time
-from datetime import datetime, timedelta
 from app import app, init_db,DB_PATH
 
 
