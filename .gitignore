@@ -9,7 +9,7 @@
 *cache*
 *.db
 *.pt
-__pycache__
+*__pycache__*
 uploads/
 <<<<<<< HEAD
 secrets.env
