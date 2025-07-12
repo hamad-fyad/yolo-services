@@ -24,3 +24,4 @@ secrets.env
 *.pyc
 *__pycache__*
 >>>>>>> e2f8dbb (fix)
+/tests/__pycache__
