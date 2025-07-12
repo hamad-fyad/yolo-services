@@ -17,4 +17,10 @@ secrets.env
 =======
 *.jpg
 *.png
+<<<<<<< HEAD
 >>>>>>> 6f64dad (fix)
+=======
+*.env
+*.pyc
+*__pycache__*
+>>>>>>> e2f8dbb (fix)
