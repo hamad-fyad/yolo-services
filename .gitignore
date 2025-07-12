@@ -11,5 +11,10 @@
 *.pt
 __pycache__
 uploads/
+<<<<<<< HEAD
 secrets.env
 *.pyc
+=======
+*.jpg
+*.png
+>>>>>>> 6f64dad (fix)
