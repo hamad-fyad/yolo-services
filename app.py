@@ -7,6 +7,7 @@ import os
 import uuid
 import shutil
 import time
+import glob
 
 # Disable GPU usage
 import torch
@@ -93,10 +94,13 @@ def save_detection_object(prediction_uid, label, score, box):
 def predict(file: UploadFile = File(...)):
     """
     Predict objects in an image
+    todo in the ui make a commnet that the model acceptes only images jpeg/jpg and png 
     """
     start_time = time.time()
 
     ext = os.path.splitext(file.filename)[1]
+    if ext not in [".jpg", ".jpeg", ".png"]:
+        raise HTTPException(status_code=400, detail="Invalid image format")
     uid = str(uuid.uuid4())
     original_path = os.path.join(UPLOAD_DIR, uid + ext)
     predicted_path = os.path.join(PREDICTED_DIR, uid + ext)
@@ -116,6 +120,13 @@ def predict(file: UploadFile = File(...)):
     save_prediction_session(uid, original_path, predicted_path)
     
     detected_labels = []
+    if results[0].boxes is None or results[0].boxes == []:
+        return {
+            "prediction_uid": uid, 
+            "detection_count": 0,
+            "labels": detected_labels,
+            "time_took": time.time() - start_time
+        }
     for box in results[0].boxes:
         label_idx = int(box.cls[0].item())
         label = model.names[label_idx]
@@ -140,6 +151,31 @@ def get_prediction_count():
         count = conn.execute("SELECT count(*) FROM prediction_sessions WHERE timestamp >= DATETIME('now', '-7 days')").fetchall()
     return {"count": count[0][0]}
     
+@app.delete("/prediction/{uid}")
+def delete_prediction(uid: str):
+    """
+    Delete prediction session by uid
+    """
+    original_files = glob.glob(os.path.join(UPLOAD_DIR, uid + ".*"))
+    predicted_files = glob.glob(os.path.join(PREDICTED_DIR, uid + ".*"))
+
+    if not original_files or not predicted_files:
+        raise HTTPException(status_code=404, detail="Prediction not found")
+
+    try:
+        for f in original_files + predicted_files:
+            os.remove(f)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete files: {str(e)}")
+
+    with sqlite3.connect(DB_PATH) as conn:
+        try:
+            conn.execute("DELETE FROM prediction_sessions WHERE uid = ?", (uid,))
+            conn.execute("DELETE FROM detection_objects WHERE prediction_uid = ?", (uid,))
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Database deletion failed: {str(e)}")
+
+    return {"message": "Prediction session deleted"}
 
 @app.get("/prediction/{uid}")
 def get_prediction_by_uid(uid: str):
