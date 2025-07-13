@@ -22,7 +22,7 @@ class Test_labels(unittest.TestCase):
         
         self.test_image = Image.new('RGB', (100, 100), color='red')
         self.image_bytes = io.BytesIO()
-        self.test_image.save(self.image_bytes, format='JPEG')
+        self.test_image.save(self.image_bytes, format='png')
         self.image_bytes.seek(0)
     # def test_labels_empty(self):
         
@@ -58,7 +58,7 @@ class Test_labels(unittest.TestCase):
  
         response = self.client.post(
             "/predict",
-            files={"file": ("test.jpg", image_bytes, "image/jpeg")}
+            files={"file": ("test.png", image_bytes, "image/png")},
         )
         self.assertEqual(response.status_code, 200, "Prediction failed")
 
