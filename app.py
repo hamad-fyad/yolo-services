@@ -91,7 +91,7 @@ def save_detection_object(prediction_uid, label, score, box):
         """, (prediction_uid, label, score, str(box)))
 
 @app.get("/stats")
-async def get_stats():
+def get_stats():
     """
     Get statistics for the last week:
     - Total number of prediction sessions
