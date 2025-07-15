@@ -1,0 +1,32 @@
+name: Deploy Service
+
+on:
+  push:
+    branches:
+     - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Deploy to server
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.HOST }}
+        username: ubuntu
+        key: ${{ secrets.SSH_KEY }}
+        script: |
+          cd /home/ubuntu/yolo-service || (git clone https://github.com/hamad-fyad/yolo-services.git  && cd yolo-service)
+          
+          # YOUR CODE HERE ... 
+          #  - get the updated code version from github
+          #  - install venv and dependencies if needed
+          #  - set up the Linux service
+          #  - restart the service
+        
+          echo "Deployment completed"

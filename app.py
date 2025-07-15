@@ -90,6 +90,53 @@ def save_detection_object(prediction_uid, label, score, box):
             VALUES (?, ?, ?, ?)
         """, (prediction_uid, label, score, str(box)))
 
+@app.get("/stats")
+async def get_stats():
+    """
+    Get statistics for the last week:
+    - Total number of prediction sessions
+    - Average confidence score from detection_objects
+    - Most common detected labels (top 3)
+    """
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
+
+        # Total predictions in last 7 days
+        total_predictions_row = conn.execute("""
+            SELECT COUNT(*) as total FROM prediction_sessions
+            WHERE timestamp >= DATETIME('now', '-7 days')
+        """).fetchone()
+        total_predictions = total_predictions_row["total"]
+
+        # Average score for detections only from the last 7 days
+        avg_score_row = conn.execute("""
+            SELECT AVG(do.score) as avg_score
+            FROM detection_objects do
+            JOIN prediction_sessions ps ON do.prediction_uid = ps.uid
+            WHERE ps.timestamp >= DATETIME('now', '-7 days')
+        """).fetchone()
+        average_confidence_score = avg_score_row["avg_score"] or 0.0
+
+        # Top 3 most common labels in last 7 days
+        common_labels_rows = conn.execute("""
+            SELECT do.label, COUNT(*) as count
+            FROM detection_objects do
+            JOIN prediction_sessions ps ON do.prediction_uid = ps.uid
+            WHERE ps.timestamp >= DATETIME('now', '-7 days')
+            GROUP BY do.label
+            ORDER BY count DESC
+            LIMIT 3
+        """).fetchall()
+        most_common_labels = {row["label"]: row["count"] for row in common_labels_rows}
+
+    return {
+        "total_predictions": total_predictions,
+        "average_confidence_score": round(average_confidence_score, 3),
+        "most_common_labels": most_common_labels
+    }
+
+
+    
 @app.post("/predict")
 def predict(file: UploadFile = File(...)):
     """
