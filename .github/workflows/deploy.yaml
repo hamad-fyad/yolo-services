@@ -19,7 +19,9 @@ jobs:
       with:
         host: ${{ secrets.HOST }}
         username: ubuntu
+        port: 8080
         key: ${{ secrets.SSH_KEY }}
+        port: 8080
         script: |
           REPO_DIR=/home/ubuntu/YoloService
           REPO_URL=https://github.com/hamad-fyad/YoloService.git
