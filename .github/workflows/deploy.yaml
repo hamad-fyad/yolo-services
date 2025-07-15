@@ -19,7 +19,9 @@ jobs:
       with:
         host: ${{ secrets.HOST }}
         username: ubuntu
+        port: 8080
         key: ${{ secrets.SSH_KEY }}
+        port: 8080
         script: |
           cd /home/ubuntu/yolo-service || (git clone https://github.com/hamad-fyad/yolo-services.git  && cd yolo-service)
           
@@ -28,5 +30,34 @@ jobs:
           #  - install venv and dependencies if needed
           #  - set up the Linux service
           #  - restart the service
-        
+
+          echo "Pulling latest changes..."
+          git pull
+
+          bash -c '
+            if [ ! -d ".venv" ]; then
+              echo "Creating virtual environment..."
+              python3 -m venv .venv
+            else
+              echo "Virtual environment already exists."
+            fi
+
+            source .venv/bin/activate && \
+            pip install -r torch-requirements.txt && \
+            pip install -r requirements.txt
+
+            apt-get update && \
+            apt-get install ffmpeg libsm6 libxext6 -y
+
+            echo "Restarting the service..."
+            sudo systemctl restart yolo.service
+
+            status=$(systemctl is-active yolo.service)
+            if [ "$status" = "active" ]; then
+              echo "Service restarted successfully."
+            else
+              echo "Failed to restart the service."
+              exit 1
+            fi
+            '
           echo "Deployment completed"
