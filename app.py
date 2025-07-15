@@ -189,7 +189,7 @@ def predict(file: UploadFile = File(...)):
         "time_took": time_taken
     }
 
-@app.get("/prediction/count/")
+@app.get("/prediction/count")
 def get_prediction_count():
     """
     Get total number of prediction sessions
