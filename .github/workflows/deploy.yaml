@@ -20,10 +20,9 @@ jobs:
         host: ${{ secrets.HOST }}
         username: ubuntu
         key: ${{ secrets.SSH_KEY }}
-        port: 8080
         script: |
           REPO_DIR=/home/ubuntu/YoloService
-          REPO_URL=https://github.com/hamad-fyad/YoloService.git
+          REPO_URL=https://github.com/hamad-fyad/yolo-services.git
 
           # Install Python 3, venv, and pip if not already installed
           sudo apt update
