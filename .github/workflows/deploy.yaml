@@ -19,7 +19,6 @@ jobs:
       with:
         host: ${{ secrets.HOST }}
         username: ubuntu
-        port: 8080
         key: ${{ secrets.SSH_KEY }}
         port: 8080
         script: |
