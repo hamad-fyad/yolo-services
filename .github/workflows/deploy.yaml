@@ -23,12 +23,9 @@ jobs:
         port: 8080
         script: |
           REPO_DIR=/home/ubuntu/YoloService
-<<<<<<< HEAD
-          REPO_URL=https://github.com/hamad-fyad/yolo-services.git
-=======
-          REPO_URL=https://github.com/hamad-fyad/YoloService.git
->>>>>>> d11a7ede7beafde55714c3a4218b988d7390303f
 
+          REPO_URL=https://github.com/hamad-fyad/yolo-services.git
+          
           # Install Python 3, venv, and pip if not already installed
           sudo apt update
           sudo apt install -y python3 python3-venv python3-pip
