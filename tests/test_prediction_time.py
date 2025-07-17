@@ -2,13 +2,14 @@ import unittest
 from fastapi.testclient import TestClient
 from PIL import Image
 import io
-
-from app import app
+from helper_fucntion import get_auth_headers
+from app import add_user, app
 
 class TestProcessingTime(unittest.TestCase):
     def setUp(self):
         self.client = TestClient(app)
-        
+        add_user("test", "password")
+        self.auth_headers = get_auth_headers("test", "password")
         # Create a simple test image
         self.test_image = Image.new('RGB', (100, 100), color='red')
         self.image_bytes = io.BytesIO()
@@ -20,6 +21,7 @@ class TestProcessingTime(unittest.TestCase):
         
         response = self.client.post(
             "/predict",
+            headers=self.auth_headers,
             files={"file": ("test.jpg", self.image_bytes, "image/jpeg")}
         )
         
