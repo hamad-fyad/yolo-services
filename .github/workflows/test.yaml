@@ -8,9 +8,11 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    name: Run tests with coverage
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v4
@@ -21,8 +23,18 @@ jobs:
         run: |
           pip install -r torch-requirements.txt
           pip install -r requirements.txt
+          pip install pytest pytest-cov
 
-      - name: Run tests
+      - name: Run tests with coverage
         env:
           PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
-        run: python -m unittest discover -s tests -p "test_*.py"
+          
+        run: |
+          pytest --cov=app --cov-report=xml --cov-report=term-missing
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          file: ./coverage.xml
+          fail_ci_if_error: true

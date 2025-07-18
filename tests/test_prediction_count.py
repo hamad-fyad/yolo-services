@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 from PIL import Image
 import io
 import os
-from helper_fucntion import get_auth_headers
+from tests.helper_function import get_auth_headers
 from app import app, init_db,DB_PATH,add_user
 
 

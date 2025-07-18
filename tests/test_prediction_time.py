@@ -2,7 +2,7 @@ import unittest
 from fastapi.testclient import TestClient
 from PIL import Image
 import io
-from helper_fucntion import get_auth_headers
+from tests.helper_function import get_auth_headers
 from app import add_user, app
 
 class TestProcessingTime(unittest.TestCase):
