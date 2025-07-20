@@ -101,6 +101,7 @@ def get_labels(request: Request):
     """
     Get labels of objects detected in the last week
     """
+    #require_auth(request)
     with sqlite3.connect(DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
         rows = conn.execute("""
