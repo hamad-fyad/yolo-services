@@ -38,7 +38,6 @@ class Test_labels(unittest.TestCase):
 
         # Step 1: Call Pixabay API
         pixabay_api_url = f"https://pixabay.com/api/?key={api_key}&q=person&image_type=photo"
-        print(pixabay_api_url)
         api_response = requests.get(pixabay_api_url)
         self.assertEqual(api_response.status_code, 200, "Pixabay API call failed")
 

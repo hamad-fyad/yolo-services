@@ -82,17 +82,18 @@ init_db()
 #         conn.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, password))
 #     return {"message": "User created successfully"}
 
-# @app.post("/login")
-# async def login(request: Request):
-#     data = await request.json()
-#     username = data.get("username")
-#     password = data.get("password")
-#     with sqlite3.connect(DB_PATH) as conn:
-#         user = conn.execute("SELECT * FROM users WHERE username = ? AND password = ?", (username, password)).fetchone()
-#     if user:
-#         return {"message": "Login successful"}
-#     else:
-#         return {"message": "Invalid username or password"}
+@app.post("/login")
+async def login(request: Request):
+    data = await request.json()
+    username = data.get("username")
+    password = data.get("password")
+    with sqlite3.connect(DB_PATH) as conn:
+        user = conn.execute("SELECT * FROM users WHERE username = ? AND password = ?", (username, password)).fetchone()
+    if user:
+        
+        return {"message": "Login successful"}
+    else:
+        return {"message": "Invalid username or password"}
 
 
 
@@ -192,7 +193,7 @@ def get_user_id(auth_header: str):
                 if row and secrets.compare_digest(row[1], hashed_pw):
                     return row[0]  # return user_id
         except Exception:
-            raise HTTPException(status_code=401, detail="Unauthorized")
+            raise HTTPException(status_code=500, detail="Failed to authenticate user")
     return None
 def require_auth(request: Request) -> int:
     user_id = get_user_id(request.headers.get("Authorization"))
@@ -227,7 +228,6 @@ def predict(request: Request,file: UploadFile = File(...)):
 
     with open(original_path, "wb") as f:
         shutil.copyfileobj(file.file, f)
-
     try:
         results = model(original_path, device="cpu")
     except Exception as e:
