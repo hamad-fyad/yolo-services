@@ -192,7 +192,7 @@ def get_user_id(auth_header: str):
                 if row and secrets.compare_digest(row[1], hashed_pw):
                     return row[0]  # return user_id
         except Exception:
-            pass
+            raise HTTPException(status_code=401, detail="Unauthorized")
     return None
 def require_auth(request: Request) -> int:
     user_id = get_user_id(request.headers.get("Authorization"))
@@ -216,7 +216,6 @@ def predict(request: Request,file: UploadFile = File(...)):
     todo in the ui make a commnet that the model acceptes only images jpeg/jpg and png 
     """
     user_id = get_user_id(request.headers.get("Authorization"))
-    print(user_id)
     start_time = time.time()
 
     ext = os.path.splitext(file.filename)[1]
@@ -260,7 +259,8 @@ def predict(request: Request,file: UploadFile = File(...)):
         "prediction_uid": uid, 
         "detection_count": len(results[0].boxes),
         "labels": detected_labels,
-        "time_took": time_taken
+        "time_took": time_taken,
+        "user_id": user_id
     }
 
 @app.get("/prediction/count")
@@ -419,5 +419,3 @@ def health():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("app:app", host="0.0.0.0", port=8080,reload=True)
-
-#check codecov
