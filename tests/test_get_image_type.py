@@ -35,7 +35,8 @@ class TestGetImage(unittest.TestCase):
             os.remove(os.path.join(UPLOAD_DIR, self.original_filename))
             os.remove(os.path.join(PREDICTED_DIR, self.predicted_filename))
         except FileNotFoundError:
-            pass
+            return 
+            
 
     def test_get_original_image_success(self):
         response = self.client.get(

@@ -1,3 +1,4 @@
+import base64
 from fastapi import FastAPI, UploadFile, File, HTTPException, Request
 from fastapi.responses import FileResponse, Response
 from ultralytics import YOLO
@@ -82,18 +83,34 @@ init_db()
 #         conn.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, password))
 #     return {"message": "User created successfully"}
 
+import base64
+from fastapi import HTTPException
+
 @app.post("/login")
 async def login(request: Request):
     data = await request.json()
     username = data.get("username")
     password = data.get("password")
+    if not username or not password:
+        raise HTTPException(status_code=400, detail="Username and password required")
+
+    
     with sqlite3.connect(DB_PATH) as conn:
-        user = conn.execute("SELECT * FROM users WHERE username = ? AND password = ?", (username, password)).fetchone()
+         hashed_password = hash_password(password)
+         user = conn.execute(
+            "SELECT * FROM users WHERE username = ? AND password = ?",
+            (username, hashed_password)).fetchone()
+
     if user:
-        
-        return {"message": "Login successful"}
+        # Encode username:password in base64 for Basic Auth
+        token = base64.b64encode(f"{username}:{password}".encode()).decode()
+        return {
+            "message": "Login successful",
+            "Authorization": f"Basic {token}"
+        }
     else:
-        return {"message": "Invalid username or password"}
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+
 
 
 
@@ -182,7 +199,7 @@ def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
 def get_user_id(auth_header: str):
     if auth_header and auth_header.startswith("Basic "):
-        import base64, secrets
+        import  secrets
         try:
             decoded = base64.b64decode(auth_header.split(" ")[1]).decode("utf-8")
             username, password = decoded.split(":", 1)

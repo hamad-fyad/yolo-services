@@ -1,10 +1,18 @@
 import unittest
+from dotenv import load_dotenv
 from fastapi.testclient import TestClient
 from PIL import Image
 import io
 import os
+
+import requests
 from tests.helper_function import get_auth_headers
 from app import app, init_db, DB_PATH, add_user, labels
+
+
+
+load_dotenv("/Users/hamadfyad/PycharmProjects/pythonProject522/5/pythonProject/yolo-services/secrets.env")  # loads from .env by default
+api_key = os.getenv("PIXABAY_API_KEY")
 
 
 class TestGetPredictionsByLabel(unittest.TestCase):
@@ -17,10 +25,23 @@ class TestGetPredictionsByLabel(unittest.TestCase):
         add_user("test", "password")
         self.auth_headers = get_auth_headers("test", "password")
 
-        self.test_image = Image.new('RGB', (100, 100), color='red')
-        self.image_bytes = io.BytesIO()
-        self.test_image.save(self.image_bytes, format='JPEG')
-        self.image_bytes.seek(0)
+        pixabay_api_url = f"https://pixabay.com/api/?key={api_key}&q=person&image_type=photo"
+        api_response = requests.get(pixabay_api_url)
+        self.assertEqual(api_response.status_code, 200, "Pixabay API call failed")
+
+        hits = api_response.json().get("hits")
+        self.assertTrue(hits, "No image results from Pixabay")
+
+        
+        image_url = hits[0]["largeImageURL"]
+
+
+        image_response = requests.get(image_url)
+        self.assertEqual(image_response.status_code, 200, "Failed to download image from Pixabay")
+
+       
+        self.image_bytes = io.BytesIO(image_response.content)
+
 
         # Perform a prediction to insert data
         response = self.client.post(
