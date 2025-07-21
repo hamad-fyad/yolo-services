@@ -29,13 +29,7 @@ class TestGetImage(unittest.TestCase):
         with open(os.path.join(PREDICTED_DIR, self.predicted_filename), "wb") as f:
             f.write(b"dummy predicted image content")
 
-    def tearDown(self):
-        # Clean up created files
-        try:
-            os.remove(os.path.join(UPLOAD_DIR, self.original_filename))
-            os.remove(os.path.join(PREDICTED_DIR, self.predicted_filename))
-        except FileNotFoundError:
-            return 
+       
             
 
     def test_get_original_image_success(self):

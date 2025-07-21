@@ -210,7 +210,7 @@ def get_user_id(auth_header: str):
                 if row and secrets.compare_digest(row[1], hashed_pw):
                     return row[0]  # return user_id
         except Exception:
-            raise HTTPException(status_code=500, detail="Failed to authenticate user")
+            raise HTTPException(status_code=500, detail="Failed to authenticate user") # if something goes wrong with server mid auth
     return None
 def require_auth(request: Request) -> int:
     user_id = get_user_id(request.headers.get("Authorization"))

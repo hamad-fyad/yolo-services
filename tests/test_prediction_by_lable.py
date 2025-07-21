@@ -53,9 +53,6 @@ class TestGetPredictionsByLabel(unittest.TestCase):
         self.detected_labels = response.json()["labels"]
 
     def test_get_predictions_by_valid_label(self):
-        if not self.detected_labels:
-            self.skipTest("No labels detected in prediction; cannot test label-based filtering.")
-
         valid_label = self.detected_labels[0]
         response = self.client.get(
             f"/predictions/label/{valid_label}",
@@ -67,9 +64,7 @@ class TestGetPredictionsByLabel(unittest.TestCase):
 
     def test_get_predictions_by_invalid_label(self):
         invalid_label = "nonexistent_label"
-        while invalid_label in labels:
-            invalid_label += "_x"
-
+       
         response = self.client.get(
             f"/predictions/label/{invalid_label}",
             headers=self.auth_headers
