@@ -1,3 +1,4 @@
+import base64
 from fastapi import FastAPI, UploadFile, File, HTTPException, Request
 from fastapi.responses import FileResponse, Response
 from ultralytics import YOLO
@@ -82,17 +83,34 @@ init_db()
 #         conn.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, password))
 #     return {"message": "User created successfully"}
 
-# @app.post("/login")
-# async def login(request: Request):
-#     data = await request.json()
-#     username = data.get("username")
-#     password = data.get("password")
-#     with sqlite3.connect(DB_PATH) as conn:
-#         user = conn.execute("SELECT * FROM users WHERE username = ? AND password = ?", (username, password)).fetchone()
-#     if user:
-#         return {"message": "Login successful"}
-#     else:
-#         return {"message": "Invalid username or password"}
+import base64
+from fastapi import HTTPException
+
+@app.post("/login")
+async def login(request: Request):
+    data = await request.json()
+    username = data.get("username")
+    password = data.get("password")
+    if not username or not password:
+        raise HTTPException(status_code=400, detail="Username and password required")
+
+    
+    with sqlite3.connect(DB_PATH) as conn:
+         hashed_password = hash_password(password)
+         user = conn.execute(
+            "SELECT * FROM users WHERE username = ? AND password = ?",
+            (username, hashed_password)).fetchone()
+
+    if user:
+        # Encode username:password in base64 for Basic Auth
+        token = base64.b64encode(f"{username}:{password}".encode()).decode()
+        return {
+            "message": "Login successful",
+            "Authorization": f"Basic {token}"
+        }
+    else:
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+
 
 
 
@@ -181,7 +199,7 @@ def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
 def get_user_id(auth_header: str):
     if auth_header and auth_header.startswith("Basic "):
-        import base64, secrets
+        import  secrets
         try:
             decoded = base64.b64decode(auth_header.split(" ")[1]).decode("utf-8")
             username, password = decoded.split(":", 1)
@@ -192,7 +210,7 @@ def get_user_id(auth_header: str):
                 if row and secrets.compare_digest(row[1], hashed_pw):
                     return row[0]  # return user_id
         except Exception:
-            raise HTTPException(status_code=401, detail="Unauthorized")
+            raise HTTPException(status_code=500, detail="Failed to authenticate user") # if something goes wrong with server mid auth
     return None
 def require_auth(request: Request) -> int:
     user_id = get_user_id(request.headers.get("Authorization"))
@@ -227,7 +245,6 @@ def predict(request: Request,file: UploadFile = File(...)):
 
     with open(original_path, "wb") as f:
         shutil.copyfileobj(file.file, f)
-
     try:
         results = model(original_path, device="cpu")
     except Exception as e:
