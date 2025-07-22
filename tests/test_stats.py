@@ -25,7 +25,6 @@ class Test_Stats(unittest.TestCase):
         # Check response
         self.assertEqual(response.status_code, 200)
         data = response.json()
-        print(data)
         self.assertEqual(data, {"total_predictions":0,"average_confidence_score":0.0,"most_common_labels":{}})
     
     def test_stats_after_prediction(self):
@@ -37,7 +36,6 @@ class Test_Stats(unittest.TestCase):
         # Check response
         self.assertEqual(response2.status_code, 200)
         data = response2.json()
-        print(data)
         self.assertEqual(data, {"total_predictions":1,"average_confidence_score":0.0,"most_common_labels":{}})
 
 

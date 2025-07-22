@@ -1,6 +1,7 @@
 import base64
-from fastapi import FastAPI, UploadFile, File, HTTPException, Request
+from fastapi import Depends, FastAPI, UploadFile, File, HTTPException, Request
 from fastapi.responses import FileResponse, Response
+from requests import Session
 from ultralytics import YOLO
 from PIL import Image
 import sqlite3
@@ -10,7 +11,8 @@ import shutil
 import time
 import glob
 import hashlib
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from db import get_db
+from repository import query_prediction_by_uid,query_detection_objects_by_prediction_uid
 
 
 # Disable GPU usage
@@ -72,7 +74,6 @@ def init_db():
         conn.execute("CREATE INDEX IF NOT EXISTS idx_score ON detection_objects (score)")
 
 init_db()
-
 
 # @app.post("/signup")
 # async def signup(request: Request):
@@ -204,7 +205,7 @@ def get_user_id(auth_header: str):
             decoded = base64.b64decode(auth_header.split(" ")[1]).decode("utf-8")
             username, password = decoded.split(":", 1)
             hashed_pw = hash_password(password)
-            print(hashed_pw)
+
             with sqlite3.connect(DB_PATH) as conn:
                 row = conn.execute("SELECT id, password FROM users WHERE username = ?", (username,)).fetchone()
                 if row and secrets.compare_digest(row[1], hashed_pw):
@@ -219,14 +220,14 @@ def require_auth(request: Request) -> int:
     return user_id
 def add_user(username: str, password: str):
     hashed_pw = hash_password(password)
-    print(hashed_pw)
+
     try:
         with sqlite3.connect(DB_PATH) as conn:
             conn.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, hashed_pw))
     except sqlite3.IntegrityError:
         print(f"User '{username}' already exists.")
 
-
+add_user("admin", "password")
 @app.post("/predict")
 def predict(request: Request,file: UploadFile = File(...)):
     """
@@ -257,7 +258,7 @@ def predict(request: Request,file: UploadFile = File(...)):
     save_prediction_session(uid, original_path, predicted_path,user_id)
     
     detected_labels = []
-    if results[0].boxes is None or results[0].boxes == []:
+    if results[0].boxes is None or results[0].boxes == [] :
         return {
             "prediction_uid": uid, 
             "detection_count": 0,
@@ -318,36 +319,34 @@ def delete_prediction(request: Request,uid: str):
     return {"message": "Prediction session deleted"}
 
 @app.get("/prediction/{uid}")
-def get_prediction_by_uid(request: Request,uid: str):
+def get_prediction_by_uid(request: Request,uid: str,db: Session = Depends(get_db)):
     """
     Get prediction session by uid with all detected objects
     """
     require_auth(request)
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.row_factory = sqlite3.Row
-        # Get prediction session
-        session = conn.execute("SELECT * FROM prediction_sessions WHERE uid = ?", (uid,)).fetchone()
-        if not session:
-            raise HTTPException(status_code=404, detail="Prediction not found")
-            
-        # Get all detection objects for this prediction
-        objects = conn.execute(
-            "SELECT * FROM detection_objects WHERE prediction_uid = ?", 
-            (uid,)
-        ).fetchall()
+    session = query_prediction_by_uid(db,uid)
+    if not session:
+        raise HTTPException(status_code=404, detail="Prediction not found")
         
-        return {
-            "uid": session["uid"],
-            "timestamp": session["timestamp"],
-            "original_image": session["original_image"],
-            "predicted_image": session["predicted_image"],
+    # Get all detection objects for this prediction
+    # objects = query_detection_objects_by_prediction_uid(db,uid)
+    # if not objects:
+    #     raise HTTPException(status_code=404, detail="Prediction not found in detection objects")
+    
+    print(session)
+    # print(objects)
+    return {
+            "uid": session.uid,
+            "timestamp": session.timestamp,
+            "original_image": session.original_image,
+            "predicted_image": session.predicted_image,
             "detection_objects": [
-                {
-                    "id": obj["id"],
-                    "label": obj["label"],
-                    "score": obj["score"],
-                    "box": obj["box"]
-                } for obj in objects
+                # {
+                #     "id": obj.id,
+                #     "label": obj.label,
+                #     "score": obj.score,
+                #     "box": obj.box
+                # } for obj in objects
             ]
         }
 
@@ -433,6 +432,6 @@ def health():
     """
     return {"status": "ok"}
 
-if __name__ == "__main__":
+if __name__ == "__main__": # paraga no cover 
     import uvicorn
     uvicorn.run("app:app", host="0.0.0.0", port=8080,reload=True)

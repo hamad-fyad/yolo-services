@@ -40,7 +40,6 @@ class Test_Delete(unittest.TestCase):
             headers=self.auth_headers,
             files={"file": ("test.jpg", self.image_bytes, "image/jpeg")}
         )
-        print(response.json())
         uid = response.json()["prediction_uid"]
 
         response2 = self.client.delete(f"/prediction/{uid}", headers=self.auth_headers) 

@@ -31,9 +31,11 @@ class TestGetPredictionByUid(unittest.TestCase):
         self.prediction_uid = response.json()["prediction_uid"]
 
     def test_get_prediction_by_uid_success(self):
+        print(self.prediction_uid,"self.prediction_uid")
         response = self.client.get(
             f"/prediction/{self.prediction_uid}", headers=self.auth_headers
         )
+        print(response.json())
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertEqual(data["uid"], self.prediction_uid)

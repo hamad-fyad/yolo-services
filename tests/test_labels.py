@@ -61,7 +61,7 @@ class Test_labels(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 200, "Prediction failed")
 
-        print("Prediction response:", response.json())
+
 
    
         response2 = self.client.get("/labels")
