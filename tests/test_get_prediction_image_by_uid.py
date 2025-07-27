@@ -1,6 +1,7 @@
 import unittest
 from fastapi.testclient import TestClient
 import os
+import repository
 from tests.helper_function import get_auth_headers
 from app import app, init_db, DB_PATH, add_user, PREDICTED_DIR
 import sqlite3
@@ -11,13 +12,12 @@ class TestGetPredictionImage(unittest.TestCase):
 
     def setUp(self):
         self.client = TestClient(app)
-        if os.path.exists(DB_PATH):
-            os.remove(DB_PATH)
 
         init_db()
-        add_user("test", "password")
+        res = self.client.post("/signup", json={"username": "test", "password": "password"})
+        assert res.status_code == 200 
         self.auth_headers = get_auth_headers("test", "password")
-
+        
         # Create a dummy predicted image file and db entry
         os.makedirs(PREDICTED_DIR, exist_ok=True)
 
@@ -28,12 +28,7 @@ class TestGetPredictionImage(unittest.TestCase):
         with open(self.image_path, "wb") as f:
             f.write(b"dummy predicted image content")
 
-        with sqlite3.connect(DB_PATH) as conn:
-            # Insert prediction session record pointing to the dummy image
-            conn.execute("""
-                INSERT INTO prediction_sessions (uid, predicted_image) 
-                VALUES (?, ?)
-            """, (self.uid, self.image_path))
+        repository.save_prediction_session(self.uid, self.image_path)
 
     def tearDown(self):
         try:

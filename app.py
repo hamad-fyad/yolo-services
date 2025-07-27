@@ -1,7 +1,10 @@
 import base64
+import json
+from typing import Annotated
 from fastapi import Depends, FastAPI, UploadFile, File, HTTPException, Request
 from fastapi.responses import FileResponse, Response
-from requests import Session
+import sqlalchemy
+from sqlalchemy.orm import Session
 from ultralytics import YOLO
 from PIL import Image
 import sqlite3
@@ -11,9 +14,10 @@ import shutil
 import time
 import glob
 import hashlib
-from db import get_db
-from repository import query_prediction_by_uid,query_detection_objects_by_prediction_uid
-
+from db import get_db,init_db
+from models import User
+from repository import authenticate_user, create_detection_object, create_prediction, create_user, delete_prediction_detection_session, query_detection_objects_by_prediction_uid, query_prediction_by_uid, query_prediction_image_by_uid
+from pydantic import BaseModel
 
 # Disable GPU usage
 import torch
@@ -34,46 +38,13 @@ os.makedirs(PREDICTED_DIR, exist_ok=True)
 model = YOLO("yolov8n.pt")
 
 # Initialize SQLite
-def init_db():
-    with sqlite3.connect(DB_PATH) as conn:
-        # Create the users table
-        conn.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL
-        )
-        """)
-        # Create the predictions main table to store the prediction session
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS prediction_sessions (
-                uid TEXT PRIMARY KEY,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                original_image TEXT,
-                predicted_image TEXT,
-                user_id INTEGER,
-                FOREIGN KEY (user_id) REFERENCES users (id)
-            )
-        """)
-       
-        # Create the objects table to store individual detected objects in a given image
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS detection_objects (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                prediction_uid TEXT,
-                label TEXT,
-                score REAL,
-                box TEXT,
-                FOREIGN KEY (prediction_uid) REFERENCES prediction_sessions (uid)
-            )
-        """)
-        
-        # Create index for faster queries
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_prediction_uid ON detection_objects (prediction_uid)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_label ON detection_objects (label)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_score ON detection_objects (score)")
+db=get_db()
+@app.on_event("startup")
+def on_startup():
+    init_db()
 
-init_db()
+    
+
 
 # @app.post("/signup")
 # async def signup(request: Request):
@@ -86,41 +57,33 @@ init_db()
 
 import base64
 from fastapi import HTTPException
+class UserCreate(BaseModel):
+    username: str
+    password: str
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from fastapi import Security
+
+security = HTTPBasic()
 
 @app.post("/login")
-async def login(request: Request):
-    data = await request.json()
-    username = data.get("username")
-    password = data.get("password")
-    if not username or not password:
-        raise HTTPException(status_code=400, detail="Username and password required")
+def login(credentials: HTTPBasicCredentials = Security(security), db: Session = Depends(get_db)):
+    username = credentials.username
+    password = credentials.password
+    db_user = authenticate_user(db, username, password)
+    if db_user is None:
+        raise HTTPException(status_code=401, detail="Invalid username or password.")
+    return {"message": f"User '{username}' logged in successfully."}
 
-    
-    with sqlite3.connect(DB_PATH) as conn:
-         hashed_password = hash_password(password)
-         user = conn.execute(
-            "SELECT * FROM users WHERE username = ? AND password = ?",
-            (username, hashed_password)).fetchone()
-
-    if user:
-        # Encode username:password in base64 for Basic Auth
-        token = base64.b64encode(f"{username}:{password}".encode()).decode()
-        return {
-            "message": "Login successful",
-            "Authorization": f"Basic {token}"
-        }
-    else:
-        raise HTTPException(status_code=401, detail="Invalid username or password")
 
 
 
 
 @app.get("/labels")
-def get_labels(request: Request):
+def get_labels(request: Request,db:Session=Depends(get_db)):
     """
     Get labels of objects detected in the last week
     """
-    #require_auth(request)
+    require_auth(request,db)
     with sqlite3.connect(DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
         rows = conn.execute("""
@@ -132,24 +95,34 @@ def get_labels(request: Request):
 
     return [row["label"] for row in rows]
 
-def save_prediction_session(uid, original_image, predicted_image, user_id=None):
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.execute("""
-            INSERT INTO prediction_sessions (uid, original_image, predicted_image, user_id)
-            VALUES (?, ?, ?, ?)
-        """, (uid, original_image, predicted_image, user_id))
+def save_prediction_session(db : Session,uid, original_image, predicted_image, user_id=None):
+    # with sqlite3.connect(DB_PATH) as conn:
+    #     conn.execute("""
+    #         INSERT INTO prediction_sessions (uid, original_image, predicted_image, user_id)
+    #         VALUES (?, ?, ?, ?)
+    #     """, (uid, original_image, predicted_image, user_id))
+    try:
+        create_prediction(db, uid, original_image, predicted_image,user_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save prediction session: {str(e)}")
 
 
 
-def save_detection_object(prediction_uid, label, score, box):
-    """
-    Save detection object to database
-    """
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.execute("""
-            INSERT INTO detection_objects (prediction_uid, label, score, box)
-            VALUES (?, ?, ?, ?)
-        """, (prediction_uid, label, score, str(box)))
+
+def save_detection_object(db: Session,prediction_uid, label, score, box):
+    # """
+    # Save detection object to database
+    # """
+    # with sqlite3.connect(DB_PATH) as conn:
+    #     conn.execute("""
+    #         INSERT INTO detection_objects (prediction_uid, label, score, box)
+    #         VALUES (?, ?, ?, ?)
+    #     """, (prediction_uid, label, score, str(box)))
+    try:
+        box_str = json.dumps(box)
+        create_detection_object(db, prediction_uid, label, score, box_str)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save detection object: {str(e)}")
 
 @app.get("/stats")
 def get_stats():
@@ -194,49 +167,62 @@ def get_stats():
         "total_predictions": total_predictions,
         "average_confidence_score": round(average_confidence_score, 3),
         "most_common_labels": most_common_labels
+    
     }
 
 def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
-def get_user_id(auth_header: str):
+def get_user_id(auth_header: str | None, db: Session) -> int | None:
     if auth_header and auth_header.startswith("Basic "):
-        import  secrets
+        import secrets
         try:
             decoded = base64.b64decode(auth_header.split(" ")[1]).decode("utf-8")
             username, password = decoded.split(":", 1)
             hashed_pw = hash_password(password)
-
-            with sqlite3.connect(DB_PATH) as conn:
-                row = conn.execute("SELECT id, password FROM users WHERE username = ?", (username,)).fetchone()
-                if row and secrets.compare_digest(row[1], hashed_pw):
-                    return row[0]  # return user_id
-        except Exception:
-            raise HTTPException(status_code=500, detail="Failed to authenticate user") # if something goes wrong with server mid auth
-    return None
-def require_auth(request: Request) -> int:
-    user_id = get_user_id(request.headers.get("Authorization"))
+            #need to get the user from fucntion in repository file
+            user = authenticate_user(db, username, password)
+            if user and secrets.compare_digest(user.password, hashed_pw):
+                return user.id
+            return None
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to authenticate user: {str(e)}")
+    else:
+        return None
+def require_auth(request: Request, db: Session) -> int:
+    user_id = get_user_id(request.headers.get("Authorization"), db)
     if user_id is None:
         raise HTTPException(status_code=401, detail="Unauthorized")
     return user_id
-def add_user(username: str, password: str):
-    hashed_pw = hash_password(password)
 
+
+
+
+
+@app.post("/signup")
+def add_user(user: UserCreate, db: Session = Depends(get_db)):
     try:
-        with sqlite3.connect(DB_PATH) as conn:
-            conn.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, hashed_pw))
-    except sqlite3.IntegrityError:
-        print(f"User '{username}' already exists.")
+        create_user(db, user.username, user.password)
+    except sqlalchemy.exc.IntegrityError:
+        db.rollback()
+        return {"message": f"User '{user.username}' already exists."}
+    
+    token = base64.b64encode(f"{user.username}:{user.password}".encode()).decode()
+    return {
+        "message": f"User '{user.username}' created successfully.",
+        "Authorization": f"Basic {token}"
+    }
 
-add_user("admin", "password")
 @app.post("/predict")
-def predict(request: Request,file: UploadFile = File(...)):
+def predict(request: Request,file: UploadFile = File(...),db: Session = Depends(get_db)):
     """
     Predict objects in an image
     todo in the ui make a commnet that the model acceptes only images jpeg/jpg and png 
     """
-    user_id = get_user_id(request.headers.get("Authorization"))
+    user_id = get_user_id(request.headers.get("Authorization"), db)
+    print(user_id,"user_id")
+    print(user_id,"user_id")
     start_time = time.time()
-
+    print(user_id,"user_id")
     ext = os.path.splitext(file.filename)[1]
     if ext not in [".jpg", ".jpeg", ".png"]:
         raise HTTPException(status_code=400, detail="Invalid image format")
@@ -254,8 +240,7 @@ def predict(request: Request,file: UploadFile = File(...)):
     annotated_frame = results[0].plot()  # NumPy image with boxes
     annotated_image = Image.fromarray(annotated_frame)
     annotated_image.save(predicted_path)
-
-    save_prediction_session(uid, original_path, predicted_path,user_id)
+    save_prediction_session(db,uid, original_path, predicted_path,user_id)
     
     detected_labels = []
     if results[0].boxes is None or results[0].boxes == [] :
@@ -270,7 +255,7 @@ def predict(request: Request,file: UploadFile = File(...)):
         label = model.names[label_idx]
         score = float(box.conf[0])
         bbox = box.xyxy[0].tolist()
-        save_detection_object(uid, label, score, bbox)
+        save_detection_object(db,uid, label, score, bbox)
         detected_labels.append(label)
     time_taken = time.time() - start_time
     return {
@@ -286,17 +271,17 @@ def get_prediction_count(request: Request):
     """
     Get total number of prediction sessions
     """
-    require_auth(request)
+    require_auth(request,db)
     with sqlite3.connect(DB_PATH) as conn:
         count = conn.execute("SELECT count(*) FROM prediction_sessions WHERE timestamp >= DATETIME('now', '-7 days')").fetchall()
     return {"count": count[0][0]}
     
 @app.delete("/prediction/{uid}")
-def delete_prediction(request: Request,uid: str):
+def delete_prediction(request: Request,uid: str,db: Session = Depends(get_db)):
     """
     Delete prediction session by uid
     """
-    require_auth(request)
+    require_auth(request,db)
     original_files = glob.glob(os.path.join(UPLOAD_DIR, uid + ".*"))
     predicted_files = glob.glob(os.path.join(PREDICTED_DIR, uid + ".*"))
 
@@ -305,16 +290,22 @@ def delete_prediction(request: Request,uid: str):
 
     try:
         for f in original_files + predicted_files:
+            print(f,"removed")
             os.remove(f)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to delete files: {str(e)}")
 
-    with sqlite3.connect(DB_PATH) as conn:
-        try:
-            conn.execute("DELETE FROM prediction_sessions WHERE uid = ?", (uid,))
-            conn.execute("DELETE FROM detection_objects WHERE prediction_uid = ?", (uid,))
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Database deletion failed: {str(e)}")
+    try:
+        delete_prediction_detection_session(db,uid)
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete prediction session: {str(e)}")
+    # with sqlite3.connect(DB_PATH) as conn:
+    #     try:
+    #         conn.execute("DELETE FROM prediction_sessions WHERE uid = ?", (uid,))
+    #         conn.execute("DELETE FROM detection_objects WHERE prediction_uid = ?", (uid,))
+    #     except Exception as e:
+    #         raise HTTPException(status_code=500, detail=f"Database deletion failed: {str(e)}")
 
     return {"message": "Prediction session deleted"}
 
@@ -323,39 +314,39 @@ def get_prediction_by_uid(request: Request,uid: str,db: Session = Depends(get_db
     """
     Get prediction session by uid with all detected objects
     """
-    require_auth(request)
+    require_auth(request,db)
     session = query_prediction_by_uid(db,uid)
     if not session:
         raise HTTPException(status_code=404, detail="Prediction not found")
-        
+    print(session,"session")
     # Get all detection objects for this prediction
-    # objects = query_detection_objects_by_prediction_uid(db,uid)
-    # if not objects:
-    #     raise HTTPException(status_code=404, detail="Prediction not found in detection objects")
+    objects = query_detection_objects_by_prediction_uid(db,uid)
+    if not objects:
+        raise HTTPException(status_code=404, detail="Prediction not found in detection objects")
     
     print(session)
-    # print(objects)
+    print(objects)
     return {
             "uid": session.uid,
             "timestamp": session.timestamp,
             "original_image": session.original_image,
             "predicted_image": session.predicted_image,
             "detection_objects": [
-                # {
-                #     "id": obj.id,
-                #     "label": obj.label,
-                #     "score": obj.score,
-                #     "box": obj.box
-                # } for obj in objects
+                {
+                    "id": obj.id,
+                    "label": obj.label,
+                    "score": obj.score,
+                    "box": obj.boxa
+                } for obj in objects
             ]
         }
 
 @app.get("/predictions/label/{label}")
-def get_predictions_by_label(request: Request,label: str):
+def get_predictions_by_label(request: Request,label: str,db:Session=Depends(get_db)):
     """
     Get prediction sessions containing objects with specified label
     """
-    require_auth(request)
+    require_auth(request,db)
     if label not in labels :
        raise HTTPException(status_code=400, detail="Invalid image type")
     with sqlite3.connect(DB_PATH) as conn:
@@ -370,11 +361,11 @@ def get_predictions_by_label(request: Request,label: str):
         return [{"uid": row["uid"], "timestamp": row["timestamp"]} for row in rows]
 
 @app.get("/predictions/score/{min_score}")
-def get_predictions_by_score(request: Request,min_score: float):
+def get_predictions_by_score(request: Request,min_score: float,db: Session = Depends(get_db)):
     """
     Get prediction sessions containing objects with score >= min_score
     """
-    require_auth(request)
+    require_auth(request,db)
     with sqlite3.connect(DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
         rows = conn.execute("""
@@ -387,11 +378,11 @@ def get_predictions_by_score(request: Request,min_score: float):
         return [{"uid": row["uid"], "timestamp": row["timestamp"]} for row in rows]
 
 @app.get("/image/{type}/{filename}")
-def get_image(request: Request,type: str, filename: str):
+def get_image(request: Request,type: str, filename: str,db: Session = Depends(get_db)):
     """
     Get image by type and filename
     """
-    require_auth(request)
+    require_auth(request,db)
     if type not in ["original", "predicted"]:
         raise HTTPException(status_code=400, detail="Invalid image type")
     path = os.path.join("uploads", type, filename)
@@ -401,18 +392,22 @@ def get_image(request: Request,type: str, filename: str):
 
 
 @app.get("/prediction/{uid}/image")
-def get_prediction_image(uid: str, request: Request):
+def get_prediction_image(uid: str, request: Request,db: Session = Depends(get_db)):
     """
     Get prediction image by uid
     """
-    require_auth(request)
+    require_auth(request,db)
     accept = request.headers.get("accept", "")
-    with sqlite3.connect(DB_PATH) as conn:
-        row = conn.execute("SELECT predicted_image FROM prediction_sessions WHERE uid = ?", (uid,)).fetchone()
-        if not row:
-            raise HTTPException(status_code=404, detail="Prediction not found")
-        image_path = row[0]
-
+    # with sqlite3.connect(DB_PATH) as conn:
+    #     row = conn.execute("SELECT predicted_image FROM prediction_sessions WHERE uid = ?", (uid,)).fetchone()
+    #     if not row:
+    #         raise HTTPException(status_code=404, detail="Prediction not found")
+    #     image_path = row[0]
+    
+    image_path = query_prediction_image_by_uid(db,uid)
+    if not image_path:
+        raise HTTPException(status_code=404, detail="Prediction not found")
+    
     if not os.path.exists(image_path):
         raise HTTPException(status_code=404, detail="Predicted image file not found")
 

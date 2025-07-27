@@ -26,3 +26,10 @@ def get_db():
         yield db
     finally:
         db.close()
+
+def init_db():
+    from models import PredictionSession, DetectionObject, User
+    print("Initializing DB with models:", Base.metadata.tables.keys())
+
+    Base.metadata.drop_all(bind=engine)
+    Base.metadata.create_all(engine)
