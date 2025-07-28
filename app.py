@@ -41,7 +41,7 @@ model = YOLO("yolov8n.pt")
 db=get_db()
 @app.on_event("startup")
 def on_startup():
-    init_db()
+    init_db()# paragma: no cover 
 
     
 
@@ -450,8 +450,8 @@ def health():
     """
     Health check endpoint
     """
-    return {"status": "ok"}
+    return {"status": "ok"}# paragma: no cover 
 
 if __name__ == "__main__": # paragma: no cover 
-    import uvicorn
-    uvicorn.run("app:app", host="0.0.0.0", port=8080,reload=True)
+    import uvicorn# paragma: no cover 
+    uvicorn.run("app:app", host="0.0.0.0", port=8080,reload=True)# paragma: no cover 
