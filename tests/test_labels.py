@@ -15,9 +15,6 @@ class Test_labels(unittest.TestCase):
 
     def setUp(self):
         self.client = TestClient(app)
-        if os.path.exists(DB_PATH):
-            os.remove(DB_PATH)
-
         init_db()
         
         self.test_image = Image.new('RGB', (100, 100), color='red')
@@ -61,7 +58,7 @@ class Test_labels(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 200, "Prediction failed")
 
-        print("Prediction response:", response.json())
+
 
    
         response2 = self.client.get("/labels")

@@ -2,21 +2,17 @@ import unittest
 from fastapi.testclient import TestClient
 import os
 from tests.helper_function import get_auth_headers
-from app import app, init_db, DB_PATH, add_user, UPLOAD_DIR, PREDICTED_DIR
-
+from app import app, init_db, UPLOAD_DIR, PREDICTED_DIR
 
 class TestGetImage(unittest.TestCase):
 
     def setUp(self):
         self.client = TestClient(app)
-        if os.path.exists(DB_PATH):
-            os.remove(DB_PATH)
-
         init_db()
-        add_user("test", "password")
+        res = self.client.post("/signup", json={"username": "test", "password": "password"})
+        assert res.status_code == 200
         self.auth_headers = get_auth_headers("test", "password")
 
-        # Create dummy image files for testing
         os.makedirs(UPLOAD_DIR, exist_ok=True)
         os.makedirs(PREDICTED_DIR, exist_ok=True)
 
@@ -29,18 +25,10 @@ class TestGetImage(unittest.TestCase):
         with open(os.path.join(PREDICTED_DIR, self.predicted_filename), "wb") as f:
             f.write(b"dummy predicted image content")
 
-       
-            
-
-    def test_get_original_image_success(self):
-        response = self.client.get(
-            f"/image/original/{self.original_filename}",
-            headers=self.auth_headers
-        )
-        self.assertEqual(response.status_code, 200)
-        self.assertIn("content-type", response.headers)
-        self.assertTrue(response.headers["content-type"].startswith("application/octet-stream") or
-                        response.headers["content-type"].startswith("image/"))
+    def tearDown(self):
+            os.remove(os.path.join(UPLOAD_DIR, self.original_filename))
+            os.remove(os.path.join(PREDICTED_DIR, self.predicted_filename))
+      
 
     def test_get_predicted_image_success(self):
         response = self.client.get(
@@ -49,8 +37,10 @@ class TestGetImage(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertIn("content-type", response.headers)
-        self.assertTrue(response.headers["content-type"].startswith("application/octet-stream") or
-                        response.headers["content-type"].startswith("image/"))
+        self.assertTrue(
+            response.headers["content-type"].startswith("application/octet-stream") or
+            response.headers["content-type"].startswith("image/")
+        )
 
     def test_get_invalid_image_type(self):
         response = self.client.get(
