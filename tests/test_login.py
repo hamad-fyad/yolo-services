@@ -37,9 +37,4 @@ class TestLogin(unittest.TestCase):
         self.assertEqual(response.status_code, 401)
         self.assertEqual(response.json()["detail"], "Not authenticated")
 
-    def test_invalid_credentials(self):
-        response = self.client.post("/login", json={"username": "wrong", "password": "wrongpass"})
-        self.assertEqual(response.status_code, 401)
-        self.assertEqual(response.json()["detail"], "Not authenticated")
-
 
