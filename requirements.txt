@@ -15,5 +15,5 @@ pytest-html==3.2.0
 httpx
 dotenv
 glop
-
+psycopg2-binary
 sqlalchemy
