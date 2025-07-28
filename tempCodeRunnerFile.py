@@ -1,0 +1,1 @@
+postgresql://user:pass@localhost/db

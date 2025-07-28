@@ -41,7 +41,7 @@ model = YOLO("yolov8n.pt")
 db=get_db()
 @app.on_event("startup")
 def on_startup():
-    init_db() # paragma: no cover 
+    init_db() # pragma: no cover
 
     
 
@@ -69,9 +69,7 @@ security = HTTPBasic()
 def login(credentials: HTTPBasicCredentials = Security(security), db: Session = Depends(get_db)):
     username = credentials.username
     password = credentials.password
-    db_user = authenticate_user(db, username, password)
-    if db_user is None:
-        raise HTTPException(status_code=401, detail="Invalid username or password.")
+    authenticate_user(db, username, password)
     return {"message": f"User '{username}' logged in successfully.", "Authorization": f"Basic {base64.b64encode(f'{username}:{password}'.encode()).decode()}"}
 
 
@@ -450,8 +448,8 @@ def health():
     """
     Health check endpoint
     """
-    return {"status": "ok"} # paragma: no cover 
+    return {"status": "ok"} # pragma: no cover
 
-if __name__ == "__main__": # paragma: no cover 
-    import uvicorn # paragma: no cover 
-    uvicorn.run("app:app", host="0.0.0.0", port=8080,reload=True) # paragma: no cover 
+if __name__ == "__main__": # pragma: no cover
+    import uvicorn # pragma: no cover
+    uvicorn.run("app:app", host="0.0.0.0", port=8080,reload=True) # pragma: no cover
