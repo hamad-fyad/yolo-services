@@ -26,11 +26,9 @@ class TestGetImage(unittest.TestCase):
             f.write(b"dummy predicted image content")
 
     def tearDown(self):
-        try:
             os.remove(os.path.join(UPLOAD_DIR, self.original_filename))
             os.remove(os.path.join(PREDICTED_DIR, self.predicted_filename))
-        except FileNotFoundError:
-            pass
+      
 
     def test_get_predicted_image_success(self):
         response = self.client.get(

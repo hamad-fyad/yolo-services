@@ -16,7 +16,7 @@ import glob
 import hashlib
 from db import get_db,init_db
 from models import User
-from repository import authenticate_user, create_detection_object, create_prediction, create_user, delete_prediction_detection_session, query_detection_objects_by_prediction_uid, query_prediction_by_uid, query_prediction_image_by_uid
+from repository import authenticate_user, create_detection_object, create_prediction, create_user, delete_prediction_detection_session, query_average_score_last_7_days, query_detection_objects_by_prediction_last_week, query_detection_objects_by_prediction_uid, query_most_common_labels_last_7_days, query_prediction_by_label, query_prediction_by_score, query_prediction_by_uid, query_prediction_count, query_prediction_count_last_7_days, query_prediction_image_by_uid
 from pydantic import BaseModel
 
 # Disable GPU usage
@@ -72,7 +72,7 @@ def login(credentials: HTTPBasicCredentials = Security(security), db: Session = 
     db_user = authenticate_user(db, username, password)
     if db_user is None:
         raise HTTPException(status_code=401, detail="Invalid username or password.")
-    return {"message": f"User '{username}' logged in successfully."}
+    return {"message": f"User '{username}' logged in successfully.", "Authorization": f"Basic {base64.b64encode(f'{username}:{password}'.encode()).decode()}"}
 
 
 
@@ -83,17 +83,18 @@ def get_labels(request: Request,db:Session=Depends(get_db)):
     """
     Get labels of objects detected in the last week
     """
-    require_auth(request,db)
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.row_factory = sqlite3.Row
-        rows = conn.execute("""
-            SELECT DISTINCT do.label
-            FROM detection_objects do
-            JOIN prediction_sessions ps ON do.prediction_uid = ps.uid
-            WHERE ps.timestamp >= DATETIME('now', '-7 days')
-        """).fetchall()
+    #require_auth(request,db)
+    # with sqlite3.connect(DB_PATH) as conn:
+    #     conn.row_factory = sqlite3.Row
+    #     rows = conn.execute("""
+    #         SELECT DISTINCT do.label
+    #         FROM detection_objects do
+    #         JOIN prediction_sessions ps ON do.prediction_uid = ps.uid
+    #         WHERE ps.timestamp >= DATETIME('now', '-7 days')
+    #     """).fetchall()
+    rows = query_detection_objects_by_prediction_last_week(db)
 
-    return [row["label"] for row in rows]
+    return [row.label for row in rows]
 
 def save_prediction_session(db : Session,uid, original_image, predicted_image, user_id=None):
     # with sqlite3.connect(DB_PATH) as conn:
@@ -125,43 +126,56 @@ def save_detection_object(db: Session,prediction_uid, label, score, box):
         raise HTTPException(status_code=500, detail=f"Failed to save detection object: {str(e)}")
 
 @app.get("/stats")
-def get_stats():
+def get_stats(db: Session = Depends(get_db)):
     """
     Get statistics for the last week:
     - Total number of prediction sessions
     - Average confidence score from detection_objects
     - Most common detected labels (top 3)
     """
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.row_factory = sqlite3.Row
+    # with sqlite3.connect(DB_PATH) as conn:
+    #     conn.row_factory = sqlite3.Row
 
-        # Total predictions in last 7 days
-        total_predictions_row = conn.execute("""
-            SELECT COUNT(*) as total FROM prediction_sessions
-            WHERE timestamp >= DATETIME('now', '-7 days')
-        """).fetchone()
-        total_predictions = total_predictions_row["total"]
+    #     # Total predictions in last 7 days
+    #     total_predictions_row = conn.execute("""
+    #         SELECT COUNT(*) as total FROM prediction_sessions
+    #         WHERE timestamp >= DATETIME('now', '-7 days')
+    #     """).fetchone()
+    #     total_predictions = total_predictions_row.total
+    try:
+        total_predictions = query_prediction_count_last_7_days(db)
+    except Exception as e:    
+        raise HTTPException(status_code=500, detail=f"Failed to get prediction count: {str(e)}")
 
         # Average score for detections only from the last 7 days
-        avg_score_row = conn.execute("""
-            SELECT AVG(do.score) as avg_score
-            FROM detection_objects do
-            JOIN prediction_sessions ps ON do.prediction_uid = ps.uid
-            WHERE ps.timestamp >= DATETIME('now', '-7 days')
-        """).fetchone()
-        average_confidence_score = avg_score_row["avg_score"] or 0.0
+        # avg_score_row = conn.execute("""
+        #     SELECT AVG(do.score) as avg_score
+        #     FROM detection_objects do
+        #     JOIN prediction_sessions ps ON do.prediction_uid = ps.uid
+        #     WHERE ps.timestamp >= DATETIME('now', '-7 days')
+        # """).fetchone()
+        # average_confidence_score = avg_score_row.avg_score or 0.0
+    try:
+        average_confidence_score = query_average_score_last_7_days(db)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get average score: {str(e)}")
 
+        # Most common labels in last 7 days
         # Top 3 most common labels in last 7 days
-        common_labels_rows = conn.execute("""
-            SELECT do.label, COUNT(*) as count
-            FROM detection_objects do
-            JOIN prediction_sessions ps ON do.prediction_uid = ps.uid
-            WHERE ps.timestamp >= DATETIME('now', '-7 days')
-            GROUP BY do.label
-            ORDER BY count DESC
-            LIMIT 3
-        """).fetchall()
-        most_common_labels = {row["label"]: row["count"] for row in common_labels_rows}
+        # common_labels_rows = conn.execute("""
+        #     SELECT do.label, COUNT(*) as count
+        #     FROM detection_objects do
+        #     JOIN prediction_sessions ps ON do.prediction_uid = ps.uid
+        #     WHERE ps.timestamp >= DATETIME('now', '-7 days')
+        #     GROUP BY do.label
+        #     ORDER BY count DESC
+        #     LIMIT 3
+        # """).fetchall()
+        # most_common_labels = {row.label: row.count for row in common_labels_rows}
+    try:
+        most_common_labels = query_most_common_labels_last_7_days(db)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get most common labels: {str(e)}")
 
     return {
         "total_predictions": total_predictions,
@@ -193,10 +207,6 @@ def require_auth(request: Request, db: Session) -> int:
     if user_id is None:
         raise HTTPException(status_code=401, detail="Unauthorized")
     return user_id
-
-
-
-
 
 @app.post("/signup")
 def add_user(user: UserCreate, db: Session = Depends(get_db)):
@@ -267,14 +277,21 @@ def predict(request: Request,file: UploadFile = File(...),db: Session = Depends(
     }
 
 @app.get("/prediction/count")
-def get_prediction_count(request: Request):
+def get_prediction_count(request: Request,db: Session = Depends(get_db)):
     """
     Get total number of prediction sessions
     """
+    print("get_prediction_count")
     require_auth(request,db)
-    with sqlite3.connect(DB_PATH) as conn:
-        count = conn.execute("SELECT count(*) FROM prediction_sessions WHERE timestamp >= DATETIME('now', '-7 days')").fetchall()
-    return {"count": count[0][0]}
+    # with sqlite3.connect(DB_PATH) as conn:
+    #     count = conn.execute("SELECT count(*) FROM prediction_sessions WHERE timestamp >= DATETIME('now', '-7 days')").fetchall()
+    # return {"count": count[0][0]}
+    try:
+        count = query_prediction_count(db)
+        print(count,"count")
+        return {"count": count}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get prediction count: {str(e)}")
     
 @app.delete("/prediction/{uid}")
 def delete_prediction(request: Request,uid: str,db: Session = Depends(get_db)):
@@ -318,16 +335,15 @@ def get_prediction_by_uid(request: Request,uid: str,db: Session = Depends(get_db
     session = query_prediction_by_uid(db,uid)
     if not session:
         raise HTTPException(status_code=404, detail="Prediction not found")
-    print(session,"session")
     # Get all detection objects for this prediction
     objects = query_detection_objects_by_prediction_uid(db,uid)
     if not objects:
         raise HTTPException(status_code=404, detail="Prediction not found in detection objects")
     
-    print(session)
-    print(objects)
+    print(session,"session")
+    print(objects,"objects")
     return {
-            "uid": session.uid,
+            "prediction_uid": session.prediction_uid,
             "timestamp": session.timestamp,
             "original_image": session.original_image,
             "predicted_image": session.predicted_image,
@@ -336,7 +352,7 @@ def get_prediction_by_uid(request: Request,uid: str,db: Session = Depends(get_db
                     "id": obj.id,
                     "label": obj.label,
                     "score": obj.score,
-                    "box": obj.boxa
+                    "box": obj.box
                 } for obj in objects
             ]
         }
@@ -349,16 +365,19 @@ def get_predictions_by_label(request: Request,label: str,db:Session=Depends(get_
     require_auth(request,db)
     if label not in labels :
        raise HTTPException(status_code=400, detail="Invalid image type")
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.row_factory = sqlite3.Row
-        rows = conn.execute("""
-            SELECT DISTINCT ps.uid, ps.timestamp
-            FROM prediction_sessions ps
-            JOIN detection_objects do ON ps.uid = do.prediction_uid
-            WHERE do.label = ?
-        """, (label,)).fetchall()
+    # with sqlite3.connect(DB_PATH) as conn:
+    #     conn.row_factory = sqlite3.Row
+    #     rows = conn.execute("""
+    #         SELECT DISTINCT ps.uid, ps.timestamp
+    #         FROM prediction_sessions ps
+    #         JOIN detection_objects do ON ps.uid = do.prediction_uid
+    #         WHERE do.label = ?
+    #     """, (label,)).fetchall()
+    rows = query_prediction_by_label(db,label)
+    if not rows:
+        raise HTTPException(status_code=404, detail="Prediction not found")
         
-        return [{"uid": row["uid"], "timestamp": row["timestamp"]} for row in rows]
+    return [{"prediction_uid": row.prediction_uid, "timestamp": row.timestamp} for row in rows]
 
 @app.get("/predictions/score/{min_score}")
 def get_predictions_by_score(request: Request,min_score: float,db: Session = Depends(get_db)):
@@ -366,16 +385,22 @@ def get_predictions_by_score(request: Request,min_score: float,db: Session = Dep
     Get prediction sessions containing objects with score >= min_score
     """
     require_auth(request,db)
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.row_factory = sqlite3.Row
-        rows = conn.execute("""
-            SELECT DISTINCT ps.uid, ps.timestamp
-            FROM prediction_sessions ps
-            JOIN detection_objects do ON ps.uid = do.prediction_uid
-            WHERE do.score >= ?
-        """, (min_score,)).fetchall()
+    # with sqlite3.connect(DB_PATH) as conn:
+    #     conn.row_factory = sqlite3.Row
+    #     rows = conn.execute("""
+    #         SELECT DISTINCT ps.uid, ps.timestamp
+    #         FROM prediction_sessions ps
+    #         JOIN detection_objects do ON ps.uid = do.prediction_uid
+    #         WHERE do.score >= ?
+    #     """, (min_score,)).fetchall()
         
-        return [{"uid": row["uid"], "timestamp": row["timestamp"]} for row in rows]
+    #     return [{"uid": row["uid"], "timestamp": row["timestamp"]} for row in rows]
+    try:
+        rows = query_prediction_by_score(db,min_score)
+        return [{"prediction_uid": row.prediction_uid, "timestamp": row.timestamp} for row in rows]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get predictions by score: {str(e)}")
+    
 
 @app.get("/image/{type}/{filename}")
 def get_image(request: Request,type: str, filename: str,db: Session = Depends(get_db)):
@@ -403,14 +428,14 @@ def get_prediction_image(uid: str, request: Request,db: Session = Depends(get_db
     #     if not row:
     #         raise HTTPException(status_code=404, detail="Prediction not found")
     #     image_path = row[0]
-    
+    print("query pred image uid ")
     image_path = query_prediction_image_by_uid(db,uid)
     if not image_path:
         raise HTTPException(status_code=404, detail="Prediction not found")
     
     if not os.path.exists(image_path):
         raise HTTPException(status_code=404, detail="Predicted image file not found")
-
+    
     if "image/png" in accept:
         return FileResponse(image_path, media_type="image/png")
     elif "image/jpeg" in accept or "image/jpg" in accept:
@@ -427,6 +452,6 @@ def health():
     """
     return {"status": "ok"}
 
-if __name__ == "__main__": # paraga no cover 
+if __name__ == "__main__": # paragma: no cover 
     import uvicorn
     uvicorn.run("app:app", host="0.0.0.0", port=8080,reload=True)

@@ -15,9 +15,6 @@ class Test_labels(unittest.TestCase):
 
     def setUp(self):
         self.client = TestClient(app)
-        if os.path.exists(DB_PATH):
-            os.remove(DB_PATH)
-
         init_db()
         
         self.test_image = Image.new('RGB', (100, 100), color='red')

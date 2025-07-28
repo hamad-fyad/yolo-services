@@ -1,21 +1,30 @@
 import hashlib
 import os
 from fastapi import HTTPException
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from models import PredictionSession, DetectionObject, User
-from datetime import datetime
+from datetime import datetime, timedelta
 
 
 def query_prediction_by_uid(db: Session,prediction_uid: str):
     return db.query(PredictionSession).filter_by(prediction_uid=prediction_uid).first()
+def query_prediction_count(db: Session):
+    return db.query(PredictionSession).count()
 
+def query_average_score(db: Session):
+    return db.query(DetectionObject.score).all()
+def query_prediction_by_score(db: Session,min_score: float):
+    return db.query(PredictionSession).join(DetectionObject).filter(DetectionObject.score >= min_score).all()
 def query_detection_objects_by_prediction_uid(db: Session,prediction_uid: str):
     return db.query(DetectionObject).filter_by(prediction_uid=prediction_uid).all()
-
+def query_detection_objects_by_prediction_last_week(db: Session):
+    return db.query(DetectionObject).filter(PredictionSession.timestamp >= datetime.now() - timedelta(days=7)).all()
 def query_all_predictions(db: Session):
     return db.query(PredictionSession).all()
-
+def query_prediction_by_label(db: Session,label: str):
+    return db.query(PredictionSession).join(DetectionObject).filter(DetectionObject.label == label).all()
 def query_all_detection_objects(db: Session):
     return db.query(DetectionObject).all()
 
@@ -62,8 +71,22 @@ def delete_all_detection_objects(db:Session):
     db.commit()
     return detection_objects
 
+def query_prediction_count_last_7_days(db: Session) -> int:
+    seven_days_ago = datetime.now() - timedelta(days=7)
+    return db.query(PredictionSession).filter(PredictionSession.timestamp >= seven_days_ago).count()
+def query_average_score_last_7_days(db: Session):
+    return db.query(func.avg(DetectionObject.score))\
+        .join(PredictionSession, DetectionObject.prediction_uid == PredictionSession.prediction_uid)\
+        .filter(PredictionSession.timestamp >= datetime.now() - timedelta(days=7))\
+        .scalar() or 0.0
 
-
+def query_most_common_labels_last_7_days(db: Session):
+    return db.query(DetectionObject.label, func.count(DetectionObject.label))\
+        .join(PredictionSession, DetectionObject.prediction_uid == PredictionSession.prediction_uid)\
+        .filter(PredictionSession.timestamp >= datetime.now() - timedelta(days=7))\
+        .group_by(DetectionObject.label)\
+        .order_by(func.count(DetectionObject.label).desc())\
+        .limit(3).all()
 def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
 
