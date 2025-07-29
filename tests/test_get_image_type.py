@@ -12,9 +12,9 @@ class TestGetImage(unittest.TestCase):
         res = self.client.post("/signup", json={"username": "test", "password": "password"})
         assert res.status_code == 200
         self.auth_headers = get_auth_headers("test", "password")
-
         os.makedirs(UPLOAD_DIR, exist_ok=True)
         os.makedirs(PREDICTED_DIR, exist_ok=True)
+
 
         self.original_filename = "test_original.jpg"
         self.predicted_filename = "test_predicted.jpg"

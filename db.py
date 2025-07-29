@@ -10,7 +10,7 @@ DB_BACKEND = os.getenv("DB_BACKEND", "sqlite")
 print("DB_BACKEND:", DB_BACKEND)
 
 if DB_BACKEND == "postgres":
-    DATABASE_URL = "postgresql://user:pass@localhost/predictions"
+    DATABASE_URL = "postgresql://user:pass@localhost/predictions" 
 
 else:
     DATABASE_URL = "sqlite:///./predictions.db"

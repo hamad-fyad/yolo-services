@@ -39,12 +39,12 @@ model = YOLO("yolov8n.pt")
 
 # Initialize SQLite
 db=get_db()
-@app.on_event("startup")
-def on_startup():
-    init_db() # pragma: no cover
+# @app.on_event("startup")
+# def on_startup():
+#     init_db() # pragma: no cover
 
     
-
+init_db()
 
 # @app.post("/signup")
 # async def signup(request: Request):
