@@ -25,3 +25,4 @@ secrets.env
 *__pycache__*
 >>>>>>> e2f8dbb (fix)
 /tests/__pycache__
+command.txt
