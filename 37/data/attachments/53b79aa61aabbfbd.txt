@@ -1,0 +1,11 @@
+Initializing DB with models: dict_keys(['users', 'prediction_sessions', 'detection_objects'])
+None user_id
+None user_id
+None user_id
+
+image 1/1 /home/runner/work/yolo-services/yolo-services/uploads/original/f1a23d28-8429-463f-98c6-e41d7dcdaaad.jpg: 640x640 (no detections), 103.0ms
+Speed: 2.8ms preprocess, 103.0ms inference, 0.6ms postprocess per image at shape (1, 3, 640, 640)
+{'prediction_uid': 'f1a23d28-8429-463f-98c6-e41d7dcdaaad', 'detection_count': 0, 'labels': [], 'time_took': 0.11107039451599121, 'user_id': None}
+<models.PredictionSession object at 0x7fd2cbf10860> session
+[<Mock id='140543425798288'>, <Mock id='140543425797424'>] objects
+{'prediction_uid': 'f1a23d28-8429-463f-98c6-e41d7dcdaaad', 'timestamp': '2025-08-20T08:31:55.531954', 'original_image': 'uploads/original/f1a23d28-8429-463f-98c6-e41d7dcdaaad.jpg', 'predicted_image': 'uploads/predicted/f1a23d28-8429-463f-98c6-e41d7dcdaaad.jpg', 'detection_objects': [{'id': 1, 'label': 'cat', 'score': 0.9, 'box': [0, 0, 100, 100]}, {'id': 2, 'label': 'dog', 'score': 0.85, 'box': [10, 10, 80, 80]}]}
