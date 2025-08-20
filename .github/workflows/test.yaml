@@ -95,12 +95,11 @@ jobs:
             fi
           done
 
+      # ✅ Safe download of allure-history (first run won't error out)
       - name: Download existing allure history
-        uses: actions/download-artifact@v4
-        with:
-          name: allure-history
-          path: allure-history
-        continue-on-error: true
+        run: |
+          mkdir -p allure-history
+          gh run download --name allure-history --dir allure-history || true
           
       - name: Generate Allure Report
         uses: simple-elf/allure-report-action@master
