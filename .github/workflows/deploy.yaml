@@ -21,7 +21,7 @@ jobs:
         username: ubuntu
         key: ${{ secrets.SSH_KEY }}
         script: |
-          REPO_DIR=/home/ubuntu/YoloService
+          REPO_DIR=/home/ubuntu/yolo-services
 
           REPO_URL=https://github.com/hamad-fyad/yolo-services.git
           
