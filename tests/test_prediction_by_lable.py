@@ -8,21 +8,22 @@ import os
 import requests
 from tests.helper_function import get_auth_headers
 from app import app, init_db, DB_PATH, add_user, labels
-
+from unittest.mock import patch 
 
 
 load_dotenv("/Users/hamadfyad/PycharmProjects/pythonProject522/5/pythonProject/yolo-services/secrets.env")  # loads from .env by default
 api_key = os.getenv("PIXABAY_API_KEY")
 
 
+
 class TestGetPredictionsByLabel(unittest.TestCase):
+
+    
     def setUp(self):
         self.client = TestClient(app)
-        if os.path.exists(DB_PATH):
-            os.remove(DB_PATH)
 
         init_db()
-        add_user("test", "password")
+        res = self.client.post("/signup", json={"username": "test", "password": "password"})
         self.auth_headers = get_auth_headers("test", "password")
 
         pixabay_api_url = f"https://pixabay.com/api/?key={api_key}&q=person&image_type=photo"
@@ -51,7 +52,7 @@ class TestGetPredictionsByLabel(unittest.TestCase):
         )
         self.prediction_uid = response.json()["prediction_uid"]
         self.detected_labels = response.json()["labels"]
-
+    # @patch("app.require_auth", return_value=1)
     def test_get_predictions_by_valid_label(self):
         valid_label = self.detected_labels[0]
         response = self.client.get(
@@ -60,7 +61,7 @@ class TestGetPredictionsByLabel(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 200)
         data = response.json()
-        self.assertTrue(any(pred["uid"] == self.prediction_uid for pred in data))
+        self.assertTrue(any(pred["prediction_uid"] == self.prediction_uid for pred in data))
 
     def test_get_predictions_by_invalid_label(self):
         invalid_label = "nonexistent_label"

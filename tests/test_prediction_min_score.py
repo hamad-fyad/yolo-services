@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 from dotenv import load_dotenv
 from fastapi.testclient import TestClient
 from PIL import Image
@@ -14,11 +15,9 @@ api_key = os.getenv("PIXABAY_API_KEY")
 class TestGetPredictionsByScore(unittest.TestCase):
     def setUp(self):
         self.client = TestClient(app)
-        if os.path.exists(DB_PATH):
-            os.remove(DB_PATH)
+       
 
         init_db()
-        add_user("test", "password")
         self.auth_headers = get_auth_headers("test", "password")
 
         self.test_image = Image.new('RGB', (100, 100), color='red')
@@ -34,8 +33,8 @@ class TestGetPredictionsByScore(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.prediction_uid = response.json()["prediction_uid"]
-
-    def test_get_predictions_by_score_valid(self):
+    @patch('app.require_auth', return_value='1')
+    def test_get_predictions_by_score_valid(self,mock_auth):
         pixabay_api_url = f"https://pixabay.com/api/?key={api_key}&q=person&image_type=photo"
         api_response = requests.get(pixabay_api_url)
         self.assertEqual(api_response.status_code, 200, "Pixabay API call failed")
@@ -66,9 +65,9 @@ class TestGetPredictionsByScore(unittest.TestCase):
         )
         self.assertEqual(response2.status_code, 200)
         data = response2.json()
-        self.assertTrue(any(pred["uid"] == prediction_uid for pred in data))
-
-    def test_get_predictions_by_high_score(self):
+        self.assertTrue(any(pred["prediction_uid"] == prediction_uid for pred in data))
+    @patch('app.require_auth', return_value='1')
+    def test_get_predictions_by_high_score(self, mock_auth):
         # Try a high threshold, unlikely to match any detection
         response = self.client.get(
             "/predictions/score/0.99",
@@ -77,4 +76,4 @@ class TestGetPredictionsByScore(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertIsInstance(data, list)  # Always a list
-        self.assertTrue(all(pred["uid"] != self.prediction_uid for pred in data))
+        self.assertTrue(all(pred["prediction_uid"] != self.prediction_uid for pred in data))
