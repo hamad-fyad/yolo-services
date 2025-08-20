@@ -1,0 +1,8 @@
+Initializing DB with models: dict_keys(['users', 'prediction_sessions', 'detection_objects'])
+None user_id
+None user_id
+None user_id
+
+image 1/1 /home/runner/work/yolo-services/yolo-services/uploads/original/8fe05692-7cf6-47e7-97b1-e122e89ed1a8.jpg: 640x640 (no detections), 100.8ms
+Speed: 2.9ms preprocess, 100.8ms inference, 0.6ms postprocess per image at shape (1, 3, 640, 640)
+{'prediction_uid': '8fe05692-7cf6-47e7-97b1-e122e89ed1a8', 'detection_count': 0, 'labels': [], 'time_took': 0.10904407501220703, 'user_id': None}

@@ -1,0 +1,2 @@
+Initializing DB with models: dict_keys(['users', 'prediction_sessions', 'detection_objects'])
+{'message': "User 'testuser' logged in successfully.", 'Authorization': 'Basic dGVzdHVzZXI6dGVzdHBhc3M='}

@@ -1,0 +1,4 @@
+Initializing DB with models: dict_keys(['users', 'prediction_sessions', 'detection_objects'])
+None user_id
+None user_id
+None user_id
