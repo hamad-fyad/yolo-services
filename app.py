@@ -43,9 +43,6 @@ db=get_db()
 def on_startup():
     init_db() # pragma: no cover
 
-    
-
-
 # @app.post("/signup")
 # async def signup(request: Request):
 #     data = await request.json()
