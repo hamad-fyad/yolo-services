@@ -38,10 +38,10 @@ os.makedirs(PREDICTED_DIR, exist_ok=True)
 model = YOLO("yolov8n.pt")
 
 # Initialize SQLite
-db=get_db()
-# @app.on_event("startup")
-# def on_startup():
-#     init_db() # pragma: no cover
+
+@app.on_event("startup")
+def on_startup():
+    init_db() # pragma: no cover
 
     
 init_db()

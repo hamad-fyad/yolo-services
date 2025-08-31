@@ -1,23 +1,22 @@
-# db.py
-
-
 import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 
-
+# Default backend is sqlite
 DB_BACKEND = os.getenv("DB_BACKEND", "sqlite")
-print("DB_BACKEND:", DB_BACKEND)
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-if DB_BACKEND == "postgres":
-    DATABASE_URL = "postgresql://user:pass@localhost/predictions" 
+if not DATABASE_URL:  # fallback if DATABASE_URL is not provided
+    if DB_BACKEND == "postgres":
+        DATABASE_URL = "postgresql://user:pass@localhost/predictions"
+    else:
+        DATABASE_URL = "sqlite:///./predictions.db"
 
-else:
-    DATABASE_URL = "sqlite:///./predictions.db"
+print("Using DB:", DATABASE_URL)
 
 engine = create_engine(
     DATABASE_URL,
-    connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {},
+    connect_args={"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {},
 )
 
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
