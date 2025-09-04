@@ -2,6 +2,7 @@ import base64
 import json
 from typing import Annotated
 from fastapi import Depends, FastAPI, UploadFile, File, HTTPException, Request
+from fastapi.params import Query
 from fastapi.responses import FileResponse, Response
 import sqlalchemy
 from sqlalchemy.orm import Session
@@ -18,7 +19,7 @@ from db import get_db,init_db
 from models import User
 from repository import authenticate_user, create_detection_object, create_prediction, create_user, delete_prediction_detection_session, query_average_score_last_7_days, query_detection_objects_by_prediction_last_week, query_detection_objects_by_prediction_uid, query_most_common_labels_last_7_days, query_prediction_by_label, query_prediction_by_score, query_prediction_by_uid, query_prediction_count, query_prediction_count_last_7_days, query_prediction_image_by_uid
 from pydantic import BaseModel
-
+import boto3
 # Disable GPU usage
 import torch
 torch.cuda.is_available = lambda: False
@@ -30,7 +31,11 @@ labels = [
 UPLOAD_DIR = "uploads/original"
 PREDICTED_DIR = "uploads/predicted"
 DB_PATH = "predictions.db"
+AWS_REGION = os.getenv("AWS_REGION", "us-west-1")
+S3_BUCKET = os.getenv("S3_BUCKET", "hamad-yolo-images")
 
+
+s3_client = boto3.client("s3", region_name=AWS_REGION)
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(PREDICTED_DIR, exist_ok=True)
 
@@ -44,7 +49,7 @@ def on_startup():
     init_db() # pragma: no cover
 
     
-init_db()
+
 
 # @app.post("/signup")
 # async def signup(request: Request):
@@ -122,6 +127,17 @@ def save_detection_object(db: Session,prediction_uid, label, score, box):
         create_detection_object(db, prediction_uid, label, score, box_str)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save detection object: {str(e)}")
+@app.get("/list-s3")
+def list_s3():
+    objects = s3_client.list_objects_v2(Bucket=S3_BUCKET)
+    keys = [obj["Key"] for obj in objects.get("Contents", [])]
+    return {"bucket": S3_BUCKET, "objects": keys}
+
+@app.post("/upload")
+def upload_file(file: UploadFile = File(...)):
+    s3_key = f"{file.filename}"
+    s3_client.put_object(Bucket=S3_BUCKET, Key=s3_key, Body=file.file)
+    return {"message": "File uploaded successfully"}
 
 @app.get("/stats")
 def get_stats(db: Session = Depends(get_db)):
@@ -219,60 +235,104 @@ def add_user(user: UserCreate, db: Session = Depends(get_db)):
         "message": f"User '{user.username}' created successfully.",
         "Authorization": f"Basic {token}"
     }
-
 @app.post("/predict")
-def predict(request: Request,file: UploadFile = File(...),db: Session = Depends(get_db)):
+def predict(
+    request: Request,
+    file: UploadFile = File(None),
+    db: Session = Depends(get_db),
+    chat_id: str = Query(None, description="Chat ID for S3 storage"),
+    img: str = Query(None, description="S3 key")
+    
+):
     """
-    Predict objects in an image
-    todo in the ui make a commnet that the model acceptes only images jpeg/jpg and png 
+    Predict objects in an image.
+    Supports:
+    - Upload via `file`
+    - Download via `img` query param (from S3)
+    Stores results in S3 under <bucket>/<chat_id>/original/ and /predicted/.
     """
-    user_id = get_user_id(request.headers.get("Authorization"), db)
-    print(user_id,"user_id")
-    print(user_id,"user_id")
-    start_time = time.time()
-    print(user_id,"user_id")
-    ext = os.path.splitext(file.filename)[1]
-    if ext not in [".jpg", ".jpeg", ".png"]:
-        raise HTTPException(status_code=400, detail="Invalid image format")
-    uid = str(uuid.uuid4())
-    original_path = os.path.join(UPLOAD_DIR, uid + ext)
-    predicted_path = os.path.join(PREDICTED_DIR, uid + ext)
 
-    with open(original_path, "wb") as f:
-        shutil.copyfileobj(file.file, f)
+    user_id = get_user_id(request.headers.get("Authorization"), db)
+    start_time = time.time()
+    if chat_id:
+        s3_chat_id = chat_id
+    elif user_id:
+        s3_chat_id = str(user_id)
+    else:
+        s3_chat_id = "anonymous"
+    uid = str(uuid.uuid4())
+    # chat_id = str(user_id) if user_id else "anonymous"
+
+    # --- Step 1: Retrieve Image ---
+    if img:  # Download from S3
+        ext = os.path.splitext(img)[1].lower()
+        if ext not in [".jpg", ".jpeg", ".png"]:
+            raise HTTPException(status_code=400, detail="Invalid image format from S3")
+        original_path = os.path.join(UPLOAD_DIR, f"{uid}{ext}")
+        try:
+            s3_client.download_file(S3_BUCKET, img, original_path)
+        except Exception as e:
+            raise HTTPException(status_code=404, detail=f"Could not download {img} from S3: {e}")
+
+    elif file:  # Uploaded directly
+        ext = os.path.splitext(file.filename)[1].lower()
+        if ext not in [".jpg", ".jpeg", ".png"]:
+            raise HTTPException(status_code=400, detail="Invalid image format")
+        original_path = os.path.join(UPLOAD_DIR, f"{uid}{ext}")
+        with open(original_path, "wb") as f:
+            shutil.copyfileobj(file.file, f)
+    else:
+        raise HTTPException(status_code=400, detail="Either file upload or img query parameter required")
+
+    predicted_path = os.path.join(PREDICTED_DIR, f"pred_{uid}{ext}")
+
+    # --- Step 2: Run YOLO Detection ---
     try:
         results = model(original_path, device="cpu")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Inference failed: {str(e)}")
 
-    annotated_frame = results[0].plot()  # NumPy image with boxes
+    annotated_frame = results[0].plot()
     annotated_image = Image.fromarray(annotated_frame)
     annotated_image.save(predicted_path)
-    save_prediction_session(db,uid, original_path, predicted_path,user_id)
-    
+
+    # --- Step 3: Save to DB ---
+    save_prediction_session(db, uid, original_path, predicted_path, user_id)
+
     detected_labels = []
-    if results[0].boxes is None or results[0].boxes == [] :
-        return {
-            "prediction_uid": uid, 
-            "detection_count": 0,
-            "labels": detected_labels,
-            "time_took": time.time() - start_time
-        }
-    for box in results[0].boxes:
-        label_idx = int(box.cls[0].item())
-        label = model.names[label_idx]
-        score = float(box.conf[0])
-        bbox = box.xyxy[0].tolist()
-        save_detection_object(db,uid, label, score, bbox)
-        detected_labels.append(label)
-    time_taken = time.time() - start_time
+    if results[0].boxes is not None and len(results[0].boxes) > 0:
+        for box in results[0].boxes:
+            label_idx = int(box.cls[0].item())
+            label = model.names[label_idx]
+            score = float(box.conf[0])
+            bbox = box.xyxy[0].tolist()
+            save_detection_object(db, uid, label, score, bbox)
+            detected_labels.append(label)
+
+    # --- Step 4: Upload images to S3 ---
+    try:
+        s3_client.upload_file(original_path, S3_BUCKET, f"{s3_chat_id}/original/{uid}{ext}")
+        s3_client.upload_file(predicted_path, S3_BUCKET, f"{s3_chat_id}/predicted/{uid}{ext}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to upload to S3: {e}")
+
+    # --- Step 5: Cleanup local files ---
+    if os.path.exists(original_path):
+        os.remove(original_path)
+    if os.path.exists(predicted_path):
+        os.remove(predicted_path)
+
+    # --- Step 6: Return response ---
     return {
-        "prediction_uid": uid, 
-        "detection_count": len(results[0].boxes),
+        "prediction_uid": uid,
+        "detection_count": len(detected_labels),
         "labels": detected_labels,
-        "time_took": time_taken,
-        "user_id": user_id
+        "time_took": time.time() - start_time,
+        "user_id": user_id,
+        "s3_original": f"s3://{S3_BUCKET}/{chat_id}/original/{uid}{ext}",
+        "s3_predicted": f"s3://{S3_BUCKET}/{chat_id}/predicted/{uid}{ext}"
     }
+
 
 @app.get("/prediction/count")
 def get_prediction_count(request: Request,db: Session = Depends(get_db)):
