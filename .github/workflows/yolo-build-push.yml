@@ -25,3 +25,5 @@ jobs:
         
         # Push the image to DockerHub
         docker push ${{ secrets.DOCKERHUB_USERNAME }}/yolo5tech:$TAG
+
+        
