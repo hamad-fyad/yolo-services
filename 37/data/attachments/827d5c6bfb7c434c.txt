@@ -1,5 +1,0 @@
-Initializing DB with models: dict_keys(['users', 'prediction_sessions', 'detection_objects'])
-1 user_id
-1 user_id
-1 user_id
-{'detail': 'Invalid image format'}
