@@ -1,4 +1,0 @@
-Initializing DB with models: dict_keys(['users', 'prediction_sessions', 'detection_objects'])
-
-image 1/1 /home/runner/work/yolo-services/yolo-services/uploads/original/58fe3e56-8b23-4d90-a05f-deb34ee3803a.jpg: 640x640 (no detections), 104.8ms
-Speed: 1.5ms preprocess, 104.8ms inference, 0.6ms postprocess per image at shape (1, 3, 640, 640)
