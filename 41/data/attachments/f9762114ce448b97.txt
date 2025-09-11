@@ -1,0 +1,5 @@
+Initializing DB with models: dict_keys(['users', 'prediction_sessions', 'detection_objects'])
+
+image 1/1 /home/runner/work/yolo-services/yolo-services/uploads/original/cfa3462f-0b7e-41aa-903c-f92d6fbbd220.jpg: 640x640 (no detections), 123.5ms
+Speed: 3.1ms preprocess, 123.5ms inference, 0.9ms postprocess per image at shape (1, 3, 640, 640)
+{'detail': 'Failed to upload to S3: Unable to locate credentials'}
