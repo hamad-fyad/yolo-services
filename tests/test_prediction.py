@@ -7,7 +7,7 @@ import os
 from tests.helper_function import get_auth_headers
 from app import app, init_db,DB_PATH
 
-
+#TODO change the the tests for the new predciton logic 
 class Test_Stats(unittest.TestCase):
 
     
